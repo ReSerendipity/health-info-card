@@ -13,16 +13,16 @@
 #pragma once
 
 typedef struct {
-    const char *relation;   // 关系，例如 "爸爸"
-    const char *phone;      // 电话，例如 "138-0000-0000"
+    const char *relation;   // 关系，例如 "爸爸"（≤2 个汉字，色块宽度有限）
+    const char *phone;      // 电话，例如 "138-0000-0000"（≤13 位字符，一行放得下）
 } health_contact_t;
 
 typedef struct {
     // ---- 基本信息 ----
-    const char *name;       // 姓名
+    const char *name;       // 姓名（≤4 个汉字为宜，大字显示）
     const char *gender;     // 性别：男 / 女
     const char *age;        // 年龄，例如 "32"
-    const char *blood_type; // 血型，例如 "A 型"（含 Rh 可写 "A 型 Rh+"）
+    const char *blood_type; // 血型，例如 "A 型"（≤8 字符，如 "A 型 Rh+"）
     // ---- 紧急联系人（最多 3 位，第二位起可留空）----
     health_contact_t contacts[3];
     // ---- 医疗信息 ----

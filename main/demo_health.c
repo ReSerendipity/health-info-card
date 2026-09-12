@@ -32,10 +32,10 @@ static int s_page = 0;                  // 当前页
 // ---------------------------------------------------------------- 工具函数
 
 // 在 panel 里放一行 "标签(色块) + 值":返回值 label,便于后续设色。
-static lv_obj_t *health_row(lv_obj_t *parent, const char *label,
+static lv_obj_t *health_row(lv_obj_t *parent, const char *label, int chip_w,
                             const char *value, int x, int y, int value_w)
 {
-    lv_obj_t *chip = ui_pixel_panel_create(parent, x, y, 58, 26, UI_MUTED);
+    lv_obj_t *chip = ui_pixel_panel_create(parent, x, y, chip_w, 26, UI_MUTED);
     lv_obj_t *chip_lbl = lv_label_create(chip);
     lv_obj_set_style_text_font(chip_lbl, &lv_font_health_16, 0);
     lv_obj_set_style_text_color(chip_lbl, lv_color_hex(UI_INK), 0);
@@ -47,7 +47,7 @@ static lv_obj_t *health_row(lv_obj_t *parent, const char *label,
     lv_obj_set_style_text_color(val, lv_color_hex(UI_INK), 0);
     lv_label_set_long_mode(val, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(val, value_w);
-    lv_obj_set_pos(val, x + 66, y + 4);
+    lv_obj_set_pos(val, x + chip_w + 8, y + 4);
     lv_label_set_text(val, value);
     return val;
 }
@@ -103,10 +103,10 @@ static lv_obj_t *build_overview(void)
     lv_obj_set_style_text_font(name, &lv_font_health_20, 0);
     lv_obj_set_style_text_color(name, lv_color_hex(UI_INK), 0);
     lv_label_set_text(name, p->name);
-    lv_obj_align(name, LV_ALIGN_TOP_MID, 0, 14);
+    lv_obj_align(name, LV_ALIGN_TOP_MID, 0, 8);
 
     // 血型徽章
-    lv_obj_t *badge = ui_pixel_panel_create(panel, 31, 64, 150, 40, UI_YELLOW);
+    lv_obj_t *badge = ui_pixel_panel_create(panel, 20, 60, 150, 36, UI_YELLOW);
     lv_obj_t *blood = lv_label_create(badge);
     lv_obj_set_style_text_font(blood, &lv_font_health_20, 0);
     lv_obj_set_style_text_color(blood, lv_color_hex(UI_INK), 0);
@@ -118,14 +118,14 @@ static lv_obj_t *build_overview(void)
     lv_obj_set_style_text_font(info, &lv_font_health_16, 0);
     lv_obj_set_style_text_color(info, lv_color_hex(UI_INK), 0);
     lv_label_set_text_fmt(info, "%s  /  %s 岁", p->gender, p->age);
-    lv_obj_align(info, LV_ALIGN_TOP_MID, 0, 122);
+    lv_obj_align(info, LV_ALIGN_TOP_MID, 0, 102);
 
     // 提示
     lv_obj_t *note = lv_label_create(panel);
     lv_obj_set_style_text_font(note, &lv_font_health_16, 0);
     lv_obj_set_style_text_color(note, lv_color_hex(UI_RED), 0);
     lv_label_set_text(note, "遇事故请出示此卡");
-    lv_obj_align(note, LV_ALIGN_BOTTOM_MID, 0, -14);
+    lv_obj_set_pos(note, 31, 130);
 
     ui_pixel_mascot_create(scr, 101, 238);
     return scr;
@@ -142,13 +142,13 @@ static lv_obj_t *build_contacts(void)
     lv_obj_set_style_text_font(head, &lv_font_health_16, 0);
     lv_obj_set_style_text_color(head, lv_color_hex(UI_INK), 0);
     lv_label_set_text(head, "家属电话");
-    lv_obj_set_pos(head, 12, 8);
+    lv_obj_set_pos(head, 10, 6);
 
-    int y = 44;
+    int y = 36;
     for (int i = 0; i < 3; i++) {
         if (p->contacts[i].relation[0] == '\0' &&
             p->contacts[i].phone[0] == '\0') continue;
-        lv_obj_t *chip = ui_pixel_panel_create(panel, 12, y, 58, 26, UI_MUTED);
+        lv_obj_t *chip = ui_pixel_panel_create(panel, 12, y, 48, 26, UI_MUTED);
         lv_obj_t *rel = lv_label_create(chip);
         lv_obj_set_style_text_font(rel, &lv_font_health_16, 0);
         lv_obj_set_style_text_color(rel, lv_color_hex(UI_INK), 0);
@@ -159,15 +159,15 @@ static lv_obj_t *build_contacts(void)
         lv_obj_set_style_text_font(phone, &lv_font_montserrat_16, 0);
         lv_obj_set_style_text_color(phone, lv_color_hex(UI_INK), 0);
         lv_label_set_text(phone, p->contacts[i].phone);
-        lv_obj_set_pos(phone, 80, y + 5);
-        y += 38;
+        lv_obj_set_pos(phone, 66, y + 5);
+        y += 32;
     }
 
     lv_obj_t *note = lv_label_create(panel);
     lv_obj_set_style_text_font(note, &lv_font_health_16, 0);
     lv_obj_set_style_text_color(note, lv_color_hex(UI_RED), 0);
     lv_label_set_text(note, "遇事故请先联系家属");
-    lv_obj_set_pos(note, 12, 148);
+    lv_obj_set_pos(note, 10, 130);
 
     return scr;
 }
@@ -179,10 +179,10 @@ static lv_obj_t *build_medical(void)
     lv_obj_t *scr = ui_pixel_screen_create("医疗信息");
     lv_obj_t *panel = ui_pixel_panel_create(scr, 14, 52, 212, 224, UI_PAPER);
 
-    lv_obj_t *a = health_row(panel, "过敏史", p->allergies, 12, 12, 108);
-    lv_obj_t *c = health_row(panel, "慢性病", p->conditions, 12, 56, 108);
-    lv_obj_t *m = health_row(panel, "常服药物", p->medications, 12, 100, 108);
-    lv_obj_t *n = health_row(panel, "备注", p->notes, 12, 144, 108);
+    lv_obj_t *a = health_row(panel, "过敏史", 70, p->allergies, 12, 12, 96);
+    lv_obj_t *c = health_row(panel, "慢性病", 70, p->conditions, 12, 56, 96);
+    lv_obj_t *m = health_row(panel, "常服药物", 84, p->medications, 12, 100, 82);
+    lv_obj_t *n = health_row(panel, "备注", 70, p->notes, 12, 144, 96);
 
     // 有过敏史时标红提醒
     if (p->allergies[0] != '\0' && strcmp(p->allergies, "无") != 0)
@@ -198,55 +198,35 @@ static lv_obj_t *build_guide(void)
     lv_obj_t *scr = ui_pixel_screen_create("急救须知");
     lv_obj_t *panel = ui_pixel_panel_create(scr, 14, 52, 212, 224, UI_PAPER);
 
-    int y = 12;
+    // 一行提示文本(超宽自动换行),返回用于后续变色的 label。
+    int y = 8;
     const int line_h = 24;
+#define GUIDE_LINE(var, color)                                             \
+    lv_obj_t *var = lv_label_create(panel);                                \
+    lv_obj_set_style_text_font(var, &lv_font_health_16, 0);                \
+    lv_obj_set_style_text_color(var, lv_color_hex(color), 0);              \
+    lv_label_set_long_mode(var, LV_LABEL_LONG_WRAP);                       \
+    lv_obj_set_width(var, 176);                                            \
+    lv_obj_set_pos(var, 14, y); y += line_h
 
-    lv_obj_t *l1 = lv_label_create(panel);
-    lv_obj_set_style_text_font(l1, &lv_font_health_16, 0);
-    lv_obj_set_style_text_color(l1, lv_color_hex(UI_INK), 0);
-    lv_label_set_text(l1, "- 遇事故请拨打 120");
-    lv_obj_set_pos(l1, 14, y); y += line_h;
-
-    lv_obj_t *l2 = lv_label_create(panel);
-    lv_obj_set_style_text_font(l2, &lv_font_health_16, 0);
-    lv_obj_set_style_text_color(l2, lv_color_hex(UI_INK), 0);
-    lv_label_set_text(l2, "- 并第一时间联系家属");
-    lv_obj_set_pos(l2, 14, y); y += line_h;
+    GUIDE_LINE(l1, UI_INK); lv_label_set_text(l1, "- 遇事故请拨打 120");
+    GUIDE_LINE(l2, UI_INK); lv_label_set_text(l2, "- 并第一时间联系家属");
 
     if (p->allergies[0] != '\0' && strcmp(p->allergies, "无") != 0) {
-        lv_obj_t *l = lv_label_create(panel);
-        lv_obj_set_style_text_font(l, &lv_font_health_16, 0);
-        lv_obj_set_style_text_color(l, lv_color_hex(UI_RED), 0);
-        lv_label_set_text_fmt(l, "- 过敏: %s 请勿使用", p->allergies);
-        lv_obj_set_pos(l, 14, y); y += line_h;
+        GUIDE_LINE(la, UI_RED); lv_label_set_text_fmt(la, "- 过敏: %s 勿使用", p->allergies);
     }
     if (p->conditions[0] != '\0' && strcmp(p->conditions, "无") != 0) {
-        lv_obj_t *l = lv_label_create(panel);
-        lv_obj_set_style_text_font(l, &lv_font_health_16, 0);
-        lv_obj_set_style_text_color(l, lv_color_hex(UI_INK), 0);
-        lv_label_set_text_fmt(l, "- 慢性病: %s", p->conditions);
-        lv_obj_set_pos(l, 14, y); y += line_h;
+        GUIDE_LINE(lc, UI_INK); lv_label_set_text_fmt(lc, "- 慢性病: %s", p->conditions);
     }
     if (p->medications[0] != '\0' && strcmp(p->medications, "无") != 0) {
-        lv_obj_t *l = lv_label_create(panel);
-        lv_obj_set_style_text_font(l, &lv_font_health_16, 0);
-        lv_obj_set_style_text_color(l, lv_color_hex(UI_INK), 0);
-        lv_label_set_text_fmt(l, "- 常服药物: %s", p->medications);
-        lv_obj_set_pos(l, 14, y); y += line_h;
+        GUIDE_LINE(lm, UI_INK); lv_label_set_text_fmt(lm, "- 常服药物: %s", p->medications);
     }
     if (p->notes[0] != '\0' && strcmp(p->notes, "无") != 0) {
-        lv_obj_t *l = lv_label_create(panel);
-        lv_obj_set_style_text_font(l, &lv_font_health_16, 0);
-        lv_obj_set_style_text_color(l, lv_color_hex(UI_INK), 0);
-        lv_label_set_text_fmt(l, "- 备注: %s", p->notes);
-        lv_obj_set_pos(l, 14, y); y += line_h;
+        GUIDE_LINE(ln, UI_INK); lv_label_set_text_fmt(ln, "- 备注: %s", p->notes);
     }
 
-    lv_obj_t *l5 = lv_label_create(panel);
-    lv_obj_set_style_text_font(l5, &lv_font_health_16, 0);
-    lv_obj_set_style_text_color(l5, lv_color_hex(UI_INK), 0);
-    lv_label_set_text_fmt(l5, "- 器官捐献: %s", p->donor);
-    lv_obj_set_pos(l5, 14, y);
+    GUIDE_LINE(ld, UI_INK); lv_label_set_text_fmt(ld, "- 器官捐献: %s", p->donor);
+#undef GUIDE_LINE
     return scr;
 }
 
@@ -260,8 +240,6 @@ static void health_load(int page)
 
 void demo_health_enter(void)
 {
-    const health_profile_t *p = &g_health_profile;
-    (void)p;
     s_screens[0] = build_overview();
     s_screens[1] = build_contacts();
     s_screens[2] = build_medical();

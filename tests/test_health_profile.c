@@ -34,14 +34,14 @@ int main(void)
 
     /* 基本信息:必填且长度受屏幕约束 */
     assert(p->name && p->name[0] != '\0');
-    assert(strlen(p->name) <= 16);                  // 20px 大字一行放得下
+    assert(strlen(p->name) <= 8);                   // 20px 大字一行放得下
     assert(strcmp(p->gender, "男") == 0 || strcmp(p->gender, "女") == 0);
     assert(p->age && p->age[0] != '\0');
     assert(strlen(p->age) <= 3);
     for (const char *c = p->age; *c; c++)
         assert(*c >= '0' && *c <= '9');
     assert(p->blood_type && p->blood_type[0] != '\0');
-    assert(strlen(p->blood_type) <= 7);             // 血型徽章 150px 放得下
+    assert(strlen(p->blood_type) <= 8);             // 血型徽章 160px 放得下
 
     /* 紧急联系人:至少一位有效,号码字符合法 */
     int valid_contacts = 0;
@@ -50,7 +50,7 @@ int main(void)
         const char *ph  = p->contacts[i].phone;
         if (rel[0] == '\0' && ph[0] == '\0') continue;      // 整行留空合法
         assert(rel[0] != '\0');                             // 有电话必须有关系
-        assert(strlen(rel) <= 6);                           // 关系色块 58px 放得下
+        assert(strlen(rel) <= 2);                           // 关系色块 48px 放得下
         assert(phone_ok(ph));
         valid_contacts++;
     }

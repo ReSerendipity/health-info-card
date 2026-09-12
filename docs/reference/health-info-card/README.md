@@ -35,8 +35,10 @@ Fill in the placeholder values (name, phones, allergies, …), rebuild, and flas
 Notes:
 
 - Phones in `138-0000-0000` grouping read best on the small screen.
-- Use `""` to hide a field, `"无"` for "none".
-- `blood_type` should stay short (e.g. `A 型`, `AB 型 Rh-`) to fit the badge.
+- Use `""` to hide a field, or the Chinese word for "none" to mark
+  "not applicable" (the character is U+65E0).
+- `blood_type` should stay short (e.g. `A+`, `AB-`, or Chinese style such as
+  `A Xing`, where the second glyph, U+578B, means "type") to fit the badge.
 - Chinese display depends on the subset fonts. If a character (e.g. a rare name
   character) shows blank, add it to `tools/health_font_chars.txt` and rerun
   `tools/gen_health_font.ps1`, then rebuild.

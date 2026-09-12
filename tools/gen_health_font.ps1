@@ -32,4 +32,20 @@ lv_font_conv --font $fontFile -r 0x20-0x7E --symbols $chars --size 20 --bpp 4 `
     --format lvgl --output (Join-Path $repoRoot "main\health_font_20.c") `
     --lv-font-name lv_font_health_20
 
+# 本项目(ESP-IDF managed 组件)只暴露 "lvgl.h" 头文件路径,
+# 把 lv_font_conv 默认的 "lvgl/lvgl.h" 回退包含统一替换为 "lvgl.h"。
+$oldInc = @"
+#ifdef LV_LVGL_H_INCLUDE_SIMPLE
+#include "lvgl.h"
+#else
+#include "lvgl/lvgl.h"
+#endif
+"@
+foreach ($name in @("health_font_16.c", "health_font_20.c")) {
+    $path = Join-Path $repoRoot "main\$name"
+    $content = Get-Content -Raw -Encoding UTF8 $path
+    $content = $content.Replace($oldInc, '#include "lvgl.h"')
+    [System.IO.File]::WriteAllText($path, $content, (New-Object Text.UTF8Encoding $false))
+}
+
 Write-Output "字体已重新生成: main/health_font_16.c, main/health_font_20.c"
