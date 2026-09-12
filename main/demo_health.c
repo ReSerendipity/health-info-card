@@ -106,7 +106,7 @@ static lv_obj_t *build_overview(void)
     lv_obj_align(name, LV_ALIGN_TOP_MID, 0, 8);
 
     // 血型徽章
-    lv_obj_t *badge = ui_pixel_panel_create(panel, 20, 60, 150, 36, UI_YELLOW);
+    lv_obj_t *badge = ui_pixel_panel_create(panel, 10, 60, 170, 36, UI_YELLOW);
     lv_obj_t *blood = lv_label_create(badge);
     lv_obj_set_style_text_font(blood, &lv_font_health_20, 0);
     lv_obj_set_style_text_color(blood, lv_color_hex(UI_INK), 0);
