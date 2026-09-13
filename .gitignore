@@ -4,3 +4,6 @@ sdkconfig.old
 managed_components/
 .vscode/
 .idea/
+
+# 整理工程前的完整备份（含 .git 的仓库副本），不要纳入版本控制
+_backup_*/
