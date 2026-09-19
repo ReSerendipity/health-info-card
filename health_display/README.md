@@ -1,7 +1,7 @@
-# health-display —— 老人健康信息展示（我们的代码）
+# health_display —— 老人健康信息展示（我们的代码）
 
 本目录是**我们自研**的部分，与从 GitHub 克隆的 FoloToy AI-Passport 框架/工具**完全分离**，
-位于工程根目录 `ESP32-C3/health-display/`，不属于 `main/`，也不在 `components/bsp` 等框架目录里。
+位于工程根目录 `ESP32-C3/health_display/`，不属于 `main/`，也不在 `components/bsp` 等框架目录里。
 
 ## 包含内容
 
@@ -21,7 +21,7 @@
 作为 ESP-IDF **外部组件**接入，不污染 `main/`：
 
 - 根目录 `CMakeLists.txt` 通过
-  `set(EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/health-display")` 把本目录加入组件搜索路径；
+  `set(EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/health_display")` 把本组件目录本身作为外部组件加入构建；
 - `main/CMakeLists.txt` 的 `REQUIRES` 里加了 `health_display`，因此 `main` 能调用本组件的
   `demo_health_enter/exit/key`、`ui_pixel_*`、`health_profile` 等接口。
 
