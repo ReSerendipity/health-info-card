@@ -27,6 +27,7 @@
 | 任务 | 修改前读取 |
 | --- | --- |
 | 任意代码修改 | `docs/development/agent-guide.zh_CN.md`、相关头文件和相邻实现 |
+| USB-Serial-JTAG 串口协议 / FAP 截屏与按键注入 | `docs/development/esp32c3-usb-serial-jtag-pitfalls.zh_CN.md` |
 | 环境引导或缺少工具链 | `docs/development/environment-setup.zh_CN.md` |
 | BSP、引脚、总线、显示、音频、电池 | `docs/hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.zh_CN.md`、`components/bsp/include/bsp_pins.h` |
 | Demo 或菜单 | `main/demo.h`、`main/main.c`、最近的 `main/demo_*.c` 实现 |

@@ -27,6 +27,7 @@ This file is the only mandatory entry point for AI-assisted work in this reposit
 | Task | Read before editing |
 | --- | --- |
 | Any code change | `docs/development/agent-guide.md`, relevant headers and neighboring implementation |
+| USB-Serial-JTAG serial protocol / FAP screenshot & key injection | `docs/development/esp32c3-usb-serial-jtag-pitfalls.md` |
 | Environment bootstrap or missing toolchain | `docs/development/environment-setup.md` |
 | BSP, pins, buses, display, audio, battery | `docs/hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md`, `components/bsp/include/bsp_pins.h` |
 | Demo or menu | `main/demo.h`, `main/main.c`, the nearest `main/demo_*.c` implementation |

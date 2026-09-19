@@ -20,6 +20,7 @@
 - [agent-guide.md](agent-guide.md)：AI 开发工作流（面向 AI 编程助手：上下文建立、需求拆解、BSP 边界、验收交付格式）。
 - [environment-setup.zh_CN.md](environment-setup.zh_CN.md)：AI 在全新机器上的环境引导，包含国际与中国大陆下载线路。
 - [build-and-test.md](build-and-test.md)：构建与验证（ESP-IDF 命令、逻辑测试、改动验证要求）。
+- [esp32c3-usb-serial-jtag-pitfalls.zh_CN.md](esp32c3-usb-serial-jtag-pitfalls.zh_CN.md)：USB-Serial-JTAG 串口截屏/按键注入协议（FAP_SCREENSHOT_V1 / FAP_KEY_V1）实测踩坑记录。
 - [ble-recovery-compatibility.zh_CN.md](ble-recovery-compatibility.zh_CN.md)：小程序 BLE
   安装所需的产物、分区与 bootloader 强制契约。
 - [coding-conventions.md](coding-conventions.md)：代码约定（语言风格、复用、注释、测试同步、资源约束等）。

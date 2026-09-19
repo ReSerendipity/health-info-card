@@ -3,6 +3,7 @@
 #include "bsp_display.h"
 #include "bsp_i2c.h"
 #include "bsp_pins.h"
+#include "fap_screenshot.h"
 #include "jpeg_store.h"
 #include "jpeg_view.h"
 #include "safety_portal.h"
@@ -273,6 +274,11 @@ void app_main(void)
         s_mode = MODE_PROFILE;
         show_profile();
     }
+
+    // 真机验收:串口截屏(FAP_SCREENSHOT_V1) + 按键注入(FAP_KEY_V1)。
+    // 注入走统一按键队列,与实体按键同路径;UI 就绪后再启动应答任务。
+    fap_screenshot_set_key_cb(button_callback);
+    fap_screenshot_start();
 
     for (;;) {
         if (!s_accept_buttons && !bsp_button_any_pressed()) {

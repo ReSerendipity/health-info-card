@@ -1,5 +1,6 @@
 idf_component_register(
     SRCS "main.c"
+         "fap_screenshot.c"
          "ui_pixel.c"
          "safety_profile.c"
          "safety_store.c"

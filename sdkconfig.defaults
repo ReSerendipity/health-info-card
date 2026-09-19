@@ -32,12 +32,20 @@ CONFIG_LV_COLOR_DEPTH_16=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_USE_QRCODE=y
-# LVGL 内置 malloc 池大小(KB)。它是独立静态区、不与系统堆共享,配大了会白白占用 RAM。
-# 本 demo UI 简单,24KB 足够;若自建复杂界面出现绘制卡死/看门狗,调大此值。
-CONFIG_LV_MEM_SIZE_KILOBYTES=32
+# LVGL 内存用系统堆(C 库 malloc),不用内置静态池:串口截屏协议需要
+# 动态分配 76,800 字节的整屏 ARGB2222 快照缓冲,远超内置池容量;
+# 官方 sound-meter 截图提交(6acfd9d)亦采用此配置。
+CONFIG_LV_USE_CLIB_MALLOC=y
+# 串口截屏协议(FAP_SCREENSHOT_V1)依赖快照辅助函数,见 docs/reference/y2lin/
+# serial-screenshot-protocol.zh_CN.md。
+CONFIG_LV_USE_SNAPSHOT=y
 
 # --- 系统 ---
 CONFIG_FREERTOS_HZ=1000
+# main 任务栈默认 3.5KB 偏紧(初始化+页面构建+日志),放宽到 8KB;
+# esp_timer 任务承担按键回调,同样放宽(官方 sound-meter 配置值)。
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_ESP_TIMER_TASK_STACK_SIZE=8192
 
 # --- Bluetooth LE / NimBLE ---
 # ESP32-C3 仅支持 BLE；示例只启用单连接 peripheral 所需的最小 host 配置。
