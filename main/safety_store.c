@@ -33,7 +33,11 @@ bool safety_store_load(safety_profile_t *profile)
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(SAFETY_NAMESPACE, NVS_READONLY, &handle);
-    if (err == ESP_ERR_NVS_NOT_FOUND) return false;
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        // 首刷无 NVS 档案:直接使用 defaults() 生成的占位健康档案
+        // (已 seal,configured=1),开机即展示,而不是进入配置门户。
+        return profile->configured != 0;
+    }
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "NVS open for read failed: %s", esp_err_to_name(err));
         return false;

@@ -7,9 +7,12 @@ int main(void)
 {
     safety_profile_t profile;
     safety_profile_defaults(&profile);
-    assert(profile.configured == 0);
+    assert(profile.configured == 1);
     assert(profile.show_full_phone == 1);
     assert(!safety_profile_has_pin(&profile));
+    assert(safety_profile_is_valid(&profile));
+    assert(strcmp(profile.age, "68") == 0);
+    assert(strcmp(profile.blood_type, "A型") == 0);
 
     strcpy(profile.phone, "13800138000");
     profile.show_full_phone = 0;

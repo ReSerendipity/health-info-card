@@ -6,6 +6,17 @@
 
 ## Unreleased
 
+- 将安心牌档案升级到 v2：结构体尾部新增显式 `age`/`blood_type` 字段，
+  首页直接展示年龄与血型；首刷无 NVS 档案时直接展示内置占位档案（姓名/年龄/
+  血型/家属/医疗备忘），不再强制进入配置门户，刷机后即可被他人阅读；
+  host 测试同步断言新的 defaults 契约。详见 docs/health-info-card-guide.zh_CN.md。
+- 新增 USB-Serial-JTAG FAP 真机验收工作流：main/fap_screenshot.c 通过统一
+  按键队列提供 FAP_SCREENSHOT_V1 全屏截屏与 FAP_KEY_V1 按键注入服务，配套
+  tools/fap_*.py 采集/校验脚本；LVGL 改用 C 库内存分配器并启用快照支持，
+  以承载 76,800 字节的整屏 ARGB2222 快照缓冲。
+- 修复 recovery_boot_hook 组件在 Windows 下的 include 目录：将 $ENV{IDF_PATH}
+  规范化为正斜杠，避免 C:\Users 中的 \U 被 CMake 当作非法转义。
+- 新增 docs/development/esp32c3-usb-serial-jtag-pitfalls.zh_CN.md（配英文版），并在 AGENTS.md 与开发索引中登记路由：USB-Serial-JTAG 串口截屏/按键注入协议的实测踩坑（DTR/RTS 干扰、寄存器级 TX、ARGB2222 快照目标不支持、主机 readline 漏读、IDF_PATH 反斜杠、no-VFS 控制台崩溃规则、64 字节整包 ZLP 终结）。
 - 新增老人安心牌应用：通过设备本地 Wi-Fi 页面离线设置资料，提供五个安心信息页面、
   家属微信二维码存储与显示、管理密码保护、电话与住址隐私控制、电量显示、一分钟深睡、
   功能键唤醒，并兼容原版资料结构及模板规定的小程序永久 Recovery 分区。

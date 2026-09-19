@@ -6,6 +6,21 @@
 
 ## Unreleased
 
+- Extended the Senior Safety Card profile to v2 with explicit `age` and
+  `blood_type` fields shown on the first page, and made first boot display a
+  ready-made placeholder profile (name / age / blood type / family contacts /
+  medical notes) instead of opening the setup portal, so the card is readable
+  immediately after flashing; the host test now asserts the new defaults
+  contract. See `docs/health-info-card-guide.md`.
+- Added a USB-Serial-JTAG FAP workflow for on-device acceptance:
+  `main/fap_screenshot.c` serves FAP_SCREENSHOT_V1 full-screen snapshots and
+  FAP_KEY_V1 key injection through the shared button queue, with
+  `tools/fap_*.py` capture/verify scripts; LVGL now uses the C-library
+  allocator with snapshot support for the 76,800-byte ARGB2222 buffer.
+- Fixed the `recovery_boot_hook` component include directory on Windows:
+  `$ENV{IDF_PATH}` is normalized to forward slashes so a backslash sequence
+  like `\U` in `C:\Users` is not parsed as an invalid CMake escape.
+- Added docs/development/esp32c3-usb-serial-jtag-pitfalls.md (with Chinese peer), routing it from AGENTS.md and the development index: field-tested pitfalls for the USB-Serial-JTAG serial screenshot/key-injection protocol (DTR/RTS interference, register-level TX, unsupported ARGB2222 snapshot target, host readline misses, IDF_PATH backslashes, no-VFS console crash rule, 64-byte ZLP terminator).
 - Added the Senior Safety Card application: offline profile setup over a local
   Wi-Fi portal, five safety-information pages, family WeChat QR storage/display,
   PIN-protected reconfiguration, phone/address privacy controls, battery status,

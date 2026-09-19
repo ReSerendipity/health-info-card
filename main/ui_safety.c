@@ -141,8 +141,11 @@ void ui_safety_show_profile(const safety_profile_t *profile, int page,
     char body[560];
 
     if (page == 0) {
-        snprintf(body, sizeof(body), "%s\n\n%s",
+        // 首页:姓名 + 年龄/血型(健康信息卡核心) + 求助语
+        snprintf(body, sizeof(body), "%s\n\n年龄 %s  ·  血型 %s\n\n%s",
                  profile->name[0] ? profile->name : "请帮助我",
+                 profile->age[0] ? profile->age : "--",
+                 profile->blood_type[0] ? profile->blood_type : "--",
                  profile->help_text[0] ? profile->help_text :
                  "您好，我可能迷路了，请帮我联系家人");
     } else if (page == 1) {

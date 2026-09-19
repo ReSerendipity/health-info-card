@@ -4,7 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SAFETY_PROFILE_VERSION 1u
+// v2: 在结构体尾部新增 age / blood_type 两个显式字段,便于事故场景
+// 直接展示年龄与血型(健康信息卡需求)。注意:version 变化会使旧版
+// 已配置档案 size 不匹配而失效(视为未配置),首版占位档案无此问题。
+#define SAFETY_PROFILE_VERSION 2u
 
 // Keep this layout compatible with the original Senior Safety Card release so
 // upgrading the application does not discard an already configured profile.
@@ -29,6 +32,8 @@ typedef struct {
     char wechat_note[80];
     uint8_t pin_salt[16];
     uint8_t pin_hash[32];
+    char age[12];        // v2: 年龄(自由文本,如 "68")
+    char blood_type[12]; // v2: 血型(如 "A型")
 } safety_profile_t;
 
 void safety_profile_defaults(safety_profile_t *profile);
