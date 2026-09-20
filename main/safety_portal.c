@@ -90,8 +90,15 @@ static const char PAGE_HTML[] =
 "<input id=relation maxlength=8 placeholder='女儿'></div></div><label>联系电话</label>"
 "<input id=phone inputmode=tel maxlength=24 placeholder='138 0000 0000'><label>备用联系电话</label>"
 "<input id=backup inputmode=tel maxlength=24><label class=check><input id=showPhone type=checkbox checked>"
-"<span>显示完整联系电话；关闭后中间数字显示为星号</span></label><label>家属微信二维码</label>"
-"<input id=qr type=file accept='image/jpeg,image/png,image/webp'><p class=tip>手机会把图片缩放为设备可识别的 240×240 JPEG。"
+"<span>显示完整联系电话；关闭后中间数字显示为星号</span></label><label>微信二维码 1（家属，建议）</label>"
+"<input id=qr0 type=file accept='image/jpeg,image/png,image/webp'>"
+"<label>微信二维码 2（备用联系人，可选）</label>"
+"<input id=qr1 type=file accept='image/jpeg,image/png,image/webp'>"
+"<label>微信二维码 3（社区/医生，可选）</label>"
+"<input id=qr2 type=file accept='image/jpeg,image/png,image/webp'>"
+"<label>微信二维码 4（其他，可选）</label>"
+"<input id=qr3 type=file accept='image/jpeg,image/png,image/webp'>"
+"<p class=tip>每张缩放为 240×240 JPEG（单张≤28KB），最多 4 张，设备上翻页键逐张查看。"
 "建议上传清晰、边缘完整的二维码截图。</p><label>微信联系说明</label>"
 "<input id=wechat maxlength=25 value='请添加我的家人，备注安心牌'></section>"
 "<section class=card><h2>健康提醒</h2><label>过敏、疾病、常用药或照护提醒</label>"
@@ -119,7 +126,7 @@ static const char PAGE_HTML[] =
 "try{let phoneRe=/^[0-9 +\\-()]*$/;if(!phoneRe.test($('phone').value)||!phoneRe.test($('backup').value))throw new Error('联系电话只能输入数字');"
 "let ageV=$('age').value;if(ageV&&(!/^\\d+$/.test(ageV)||+ageV<1||+ageV>150))throw new Error('年龄需为 1~150 的数字');"
 "let bloodV=$('blood').value;if(bloodV&&bloodV!=='未知'&&!/^(A|B|AB|O)[+-]?型?$/.test(bloodV))throw new Error('血型请填 A/B/AB/O（可带 +/-）');"
-"let f=$('qr').files[0];if(f){let blob=await jpeg(f);await api('/wechat-qr',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob})}"
+"for(let k=0;k<4;k++){let f=$('qr'+k).files[0];if(f){let blob=await jpeg(f);await api('/wechat-qr?slot='+k,{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob})}}"
 "let data={name:$('name').value,help_text:$('help').value,home_area:$('area').value,home_address:$('address').value,"
 "contact_name:$('contact').value,relation:$('relation').value,phone:$('phone').value,backup_phone:$('backup').value,"
 "medical:$('medical').value,wechat_note:$('wechat').value,age:$('age').value,blood_type:$('blood').value,"
@@ -427,6 +434,21 @@ static esp_err_t save_post(httpd_req_t *request)
     return httpd_resp_sendstr(request, "{\"ok\":true}");
 }
 
+static int qr_slot_from_query(httpd_req_t *request)
+{
+    char qbuf[64];
+    if (httpd_req_get_url_query_str(request, qbuf, sizeof(qbuf)) == ESP_OK) {
+        char v[8] = {0};
+        if (httpd_query_key_value(qbuf, "slot", v, sizeof(v)) == ESP_OK) {
+            int s = 0;
+            if (sscanf(v, "%d", &s) == 1 && s >= 0 && s < JPEG_STORE_SLOTS) {
+                return s;
+            }
+        }
+    }
+    return 0;
+}
+
 static esp_err_t qr_post(httpd_req_t *request)
 {
     if (!request_authorized(request)) return forbidden(request);
@@ -435,8 +457,9 @@ static esp_err_t qr_post(httpd_req_t *request)
         return httpd_resp_sendstr(request,
                                   "设备正在显示二维码，请返回后重试");
     }
+    int slot = qr_slot_from_query(request);
     if (request->content_len < 100 ||
-        (size_t)request->content_len > QR_UPLOAD_MAX) {
+        (size_t)request->content_len > JPEG_STORE_SLOT_MAX) {
         return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
                                    "二维码图片大小不合适");
     }
@@ -451,29 +474,29 @@ static esp_err_t qr_post(httpd_req_t *request)
                                        ? remaining : (int)sizeof(buffer));
         if (count == HTTPD_SOCK_ERR_TIMEOUT) continue;
         if (count <= 0) {
-            if (started) jpeg_store_clear();
+            if (started) jpeg_store_slot_clear(slot);
             return httpd_resp_send_err(request,
                                        HTTPD_500_INTERNAL_SERVER_ERROR,
                                        "接收图片失败");
         }
         if (!started) {
             if (count < 2 || buffer[0] != 0xFF || buffer[1] != 0xD8 ||
-                jpeg_store_begin((uint32_t)request->content_len) != 0) {
+                jpeg_store_slot_begin(slot, (uint32_t)request->content_len) != 0) {
                 return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
                                            "只接受设备可识别的 JPEG 图片");
             }
             started = true;
         }
-        if (jpeg_store_write(buffer, count) != 0) {
-            jpeg_store_clear();
+        if (jpeg_store_slot_write(buffer, count) != 0) {
+            jpeg_store_slot_clear(slot);
             return httpd_resp_send_err(request,
                                        HTTPD_500_INTERNAL_SERVER_ERROR,
                                        "写入图片失败");
         }
         received += count;
     }
-    if (jpeg_store_end() != 0) {
-        jpeg_store_clear();
+    if (jpeg_store_slot_end(slot) != 0) {
+        jpeg_store_slot_clear(slot);
         return httpd_resp_send_err(request,
                                    HTTPD_500_INTERNAL_SERVER_ERROR,
                                    "完成图片失败");
@@ -482,12 +505,12 @@ static esp_err_t qr_post(httpd_req_t *request)
     const uint8_t *jpeg = NULL;
     int jpeg_length = 0;
     jpeg_probe_t probe = JPEG_PROBE_NOT_JPEG;
-    if (jpeg_store_mmap(&jpeg, &jpeg_length) == 0) {
+    if (jpeg_store_slot_mmap(slot, &jpeg, &jpeg_length) == 0) {
         probe = jpeg_probe(jpeg, jpeg_length);
         jpeg_store_unmap();
     }
     if (probe != JPEG_PROBE_OK) {
-        jpeg_store_clear();
+        jpeg_store_slot_clear(slot);
         return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
                                    "二维码图片格式不兼容，请换一张清晰截图");
     }

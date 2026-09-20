@@ -6,6 +6,11 @@
 
 ## Unreleased
 
+- Multi-slot QR storage: the imgstore partition is now split into four
+  upload slots (28 KiB each, ~112 KiB total, still ~90% budget). The portal
+  exposes four upload fields (family / backup / community-doctor / other);
+  the device paging key steps through uploaded QR codes one at a time and
+  the page counter shows 4+N; OK opens the current QR full screen.
 - Fixed spurious Recovery entry on deep sleep: the shared button node
   GPIO0 was left floating after the ADC unit was torn down before sleep;
   a brownout/reset during sleep left its voltage in the upper-button band,

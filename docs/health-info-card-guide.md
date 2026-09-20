@@ -145,14 +145,17 @@ Capture files: `_fap_shots/fap_page_0X_*.bmp` (5 files, delivered alongside).
 
 ## 7. Storage budget and image limits
 
-- The WeChat QR code lives in the dedicated `imgstore` data partition: **128 KB**,
-  with a 4 KB file header leaving about **124 KB** of usable data. The current
-  design is a single QR-code slot.
-- The per-image upload cap is **110 KB** (`QR_UPLOAD_MAX`). It sits at about
-  **89% (~90% budget)** of the data area, deliberately not filling the space:
-  the headroom prevents write exhaustion, fragmentation, or degradation of NVS
-  and other storage; 110 KB is already far more than a 240x240 JPEG
-  (~10-20 KB) needs.
+- QR images live in the dedicated `imgstore` data partition (128 KB), split into
+  **4 slots**: slots 0-2 are 32 KiB each, slot 3 is 28 KiB; a 4 KiB header records
+  each slot's length.
+- The per-image upload cap is **28 KB** (`JPEG_STORE_SLOT_MAX`). All four slots
+  hold about 112 KB total, i.e. **~90% budget** of the data area; the headroom
+  prevents fragmentation, write jitter, or NVS degradation. 28 KB is far more
+  than a 240x240 JPEG (~10-20 KB) needs.
+- The portal offers four upload slots (family / backup / community-doctor /
+  other). On the device the paging key steps through them one by one; the page
+  counter shows `4+N` (N = populated slots), and OK opens the current QR full
+  screen.
 - The front-end downscales phone images to **240x240 JPEG** (screen width);
   the decoder rejects anything wider than 240 or taller than 320.
 - **Screen brightness is fixed**: 82% on boot, 0 (off) in deep sleep. The app

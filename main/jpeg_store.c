@@ -4,15 +4,29 @@
 
 #include <string.h>
 
-#define HEADER_SIZE 0x1000u
-#define DATA_OFFSET 0x1000u
+// imgstore partition is 0x20000 (128 KiB). Layout:
+//   0x0000..0x0FFF  header: 4 slot descriptors, 8 bytes each (magic[4]+len[4])
+//   0x1000..0x8FFF  slot 0 data (32 KiB)
+//   0x9000..0x10FFF slot 1 data (32 KiB)
+//   0x11000..0x18FFF slot 2 data (32 KiB)
+//   0x19000..0x1FFFF slot 3 data (28 KiB)
+// Every slot offset/size is 4 KiB aligned for erase safety.
 
 static const char MAGIC[4] = {'J', 'P', 'G', '1'};
+static const uint32_t SLOT_OFFSET[JPEG_STORE_SLOTS] = {
+    0x1000u, 0x9000u, 0x11000u, 0x19000u,
+};
+static const uint32_t SLOT_AREA[JPEG_STORE_SLOTS] = {
+    0x8000u, 0x8000u, 0x8000u, 0x7000u,
+};
+
+static int s_cur_slot = -1;
 static uint32_t s_write_offset;
 static esp_partition_mmap_handle_t s_source_map;
 static esp_partition_mmap_handle_t s_frame_map;
 static bool s_source_mapped;
 static bool s_frame_mapped;
+static int s_mapped_slot = -1;
 
 static const esp_partition_t *partition_named(const char *name)
 {
@@ -20,88 +34,98 @@ static const esp_partition_t *partition_named(const char *name)
                                     ESP_PARTITION_SUBTYPE_ANY, name);
 }
 
-static uint32_t stored_length(const esp_partition_t *partition)
+static bool slot_valid(int slot)
 {
-    uint8_t header[8];
-    if (!partition ||
-        esp_partition_read(partition, 0, header, sizeof(header)) != ESP_OK ||
-        memcmp(header, MAGIC, sizeof(MAGIC)) != 0) {
-        return 0;
-    }
-    return (uint32_t)header[4] | ((uint32_t)header[5] << 8) |
-           ((uint32_t)header[6] << 16) | ((uint32_t)header[7] << 24);
+    return slot >= 0 && slot < JPEG_STORE_SLOTS;
 }
 
-int jpeg_store_begin(uint32_t total_length)
+static uint32_t slot_stored_length(const esp_partition_t *p, int slot)
 {
-    const esp_partition_t *partition = partition_named("imgstore");
-    if (!partition || total_length > partition->size - DATA_OFFSET) return -1;
-    uint32_t data_erase = (total_length + 0xFFFu) & ~0xFFFu;
-    if (esp_partition_erase_range(partition, 0,
-                                  HEADER_SIZE + data_erase) != ESP_OK) {
+    uint8_t hdr[8];
+    if (!p || !slot_valid(slot) ||
+        esp_partition_read(p, (uint32_t)(slot * 8), hdr, sizeof(hdr)) != ESP_OK ||
+        memcmp(hdr, MAGIC, sizeof(MAGIC)) != 0) {
+        return 0;
+    }
+    return (uint32_t)hdr[4] | ((uint32_t)hdr[5] << 8) |
+           ((uint32_t)hdr[6] << 16) | ((uint32_t)hdr[7] << 24);
+}
+
+int jpeg_store_slot_begin(int slot, uint32_t total_length)
+{
+    const esp_partition_t *p = partition_named("imgstore");
+    if (!p || !slot_valid(slot) || total_length > JPEG_STORE_SLOT_MAX) return -1;
+    if (esp_partition_erase_range(p, SLOT_OFFSET[slot], SLOT_AREA[slot]) != ESP_OK) {
         return -2;
     }
+    s_cur_slot = slot;
     s_write_offset = 0;
     return 0;
 }
 
-int jpeg_store_write(const uint8_t *data, int length)
+int jpeg_store_slot_write(const uint8_t *data, int length)
 {
-    const esp_partition_t *partition = partition_named("imgstore");
-    if (!partition || !data || length < 0 ||
-        s_write_offset + (uint32_t)length > partition->size - DATA_OFFSET) {
+    const esp_partition_t *p = partition_named("imgstore");
+    if (!p || !data || length < 0 || s_cur_slot < 0) return -1;
+    uint32_t off = SLOT_OFFSET[s_cur_slot] + s_write_offset;
+    if (off + (uint32_t)length > SLOT_OFFSET[s_cur_slot] + SLOT_AREA[s_cur_slot]) {
         return -1;
     }
-    if (esp_partition_write(partition, DATA_OFFSET + s_write_offset,
-                            data, (size_t)length) != ESP_OK) {
-        return -2;
-    }
+    if (esp_partition_write(p, off, data, (size_t)length) != ESP_OK) return -2;
     s_write_offset += (uint32_t)length;
     return 0;
 }
 
-int jpeg_store_end(void)
+int jpeg_store_slot_end(int slot)
 {
-    const esp_partition_t *partition = partition_named("imgstore");
-    if (!partition || s_write_offset == 0) return -1;
-    uint8_t header[8];
-    memcpy(header, MAGIC, sizeof(MAGIC));
-    header[4] = s_write_offset & 0xFF;
-    header[5] = (s_write_offset >> 8) & 0xFF;
-    header[6] = (s_write_offset >> 16) & 0xFF;
-    header[7] = (s_write_offset >> 24) & 0xFF;
-    return esp_partition_write(partition, 0, header, sizeof(header)) == ESP_OK ? 0 : -2;
+    const esp_partition_t *p = partition_named("imgstore");
+    if (!p || !slot_valid(slot) || s_cur_slot != slot || s_write_offset == 0) return -1;
+    uint8_t hdr[8];
+    memcpy(hdr, MAGIC, sizeof(MAGIC));
+    hdr[4] = s_write_offset & 0xFF;
+    hdr[5] = (s_write_offset >> 8) & 0xFF;
+    hdr[6] = (s_write_offset >> 16) & 0xFF;
+    hdr[7] = (s_write_offset >> 24) & 0xFF;
+    int rc = esp_partition_write(p, (uint32_t)(slot * 8), hdr, sizeof(hdr)) == ESP_OK ? 0 : -2;
+    s_cur_slot = -1;
+    s_write_offset = 0;
+    return rc;
 }
 
-void jpeg_store_clear(void)
+bool jpeg_store_slot_has(int slot)
 {
-    const esp_partition_t *partition = partition_named("imgstore");
-    if (partition) (void)esp_partition_erase_range(partition, 0, HEADER_SIZE);
+    const esp_partition_t *p = partition_named("imgstore");
+    uint32_t n = slot_stored_length(p, slot);
+    return n > 0 && n <= SLOT_AREA[slot];
 }
 
-bool jpeg_store_has_valid(void)
+int jpeg_store_slot_count_valid(void)
 {
-    const esp_partition_t *partition = partition_named("imgstore");
-    uint32_t length = stored_length(partition);
-    return partition && length > 0 && length <= partition->size - DATA_OFFSET;
+    const esp_partition_t *p = partition_named("imgstore");
+    int count = 0;
+    for (int i = 0; i < JPEG_STORE_SLOTS; ++i) {
+        if (slot_stored_length(p, i) > 0) ++count;
+    }
+    return count;
 }
 
-int jpeg_store_mmap(const uint8_t **data, int *length)
+int jpeg_store_slot_mmap(int slot, const uint8_t **data, int *length)
 {
-    const esp_partition_t *partition = partition_named("imgstore");
-    uint32_t stored = stored_length(partition);
-    if (!partition || !data || !length || stored == 0 ||
-        stored > partition->size - DATA_OFFSET) {
+    const esp_partition_t *p = partition_named("imgstore");
+    uint32_t stored = slot_stored_length(p, slot);
+    if (!p || !data || !length || !slot_valid(slot) || stored == 0 ||
+        stored > SLOT_AREA[slot]) {
         return -1;
     }
     if (s_source_mapped) jpeg_store_unmap();
     const void *mapped = NULL;
-    if (esp_partition_mmap(partition, DATA_OFFSET, stored,
+    if (esp_partition_mmap(p, SLOT_OFFSET[slot], stored,
                            ESP_PARTITION_MMAP_DATA, &mapped,
                            &s_source_map) != ESP_OK) {
         return -2;
     }
     s_source_mapped = true;
+    s_mapped_slot = slot;
     *data = mapped;
     *length = (int)stored;
     return 0;
@@ -112,37 +136,58 @@ void jpeg_store_unmap(void)
     if (!s_source_mapped) return;
     esp_partition_munmap(s_source_map);
     s_source_mapped = false;
+    s_mapped_slot = -1;
 }
+
+void jpeg_store_clear(void)
+{
+    const esp_partition_t *p = partition_named("imgstore");
+    if (!p) return;
+    (void)esp_partition_erase_range(p, 0, 0x20000);
+}
+
+void jpeg_store_slot_clear(int slot)
+{
+    const esp_partition_t *p = partition_named("imgstore");
+    if (!p || !slot_valid(slot)) return;
+    // Erase the header bytes for this slot (a sector write 0xFF is enough) and
+    // its data area so the slot reports empty.
+    uint8_t blank[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    (void)esp_partition_write(p, (uint32_t)(slot * 8), blank, sizeof(blank));
+    (void)esp_partition_erase_range(p, SLOT_OFFSET[slot], SLOT_AREA[slot]);
+}
+
+int jpeg_store_begin(uint32_t total_length) { return jpeg_store_slot_begin(0, total_length); }
+int jpeg_store_write(const uint8_t *data, int length) { return jpeg_store_slot_write(data, length); }
+int jpeg_store_end(void) { return jpeg_store_slot_end(0); }
+bool jpeg_store_has_valid(void) { return jpeg_store_slot_count_valid() > 0; }
+int jpeg_store_mmap(const uint8_t **data, int *length) { return jpeg_store_slot_mmap(0, data, length); }
+
+// ---- decode-frame buffer on the separate `imgframe` partition ----
 
 int jpeg_frame_begin(uint32_t byte_count)
 {
-    const esp_partition_t *partition = partition_named("imgframe");
-    if (!partition || byte_count > partition->size) return -1;
+    const esp_partition_t *p = partition_named("imgframe");
+    if (!p || byte_count > p->size) return -1;
     uint32_t erase_length = (byte_count + 0xFFFu) & ~0xFFFu;
-    return esp_partition_erase_range(partition, 0, erase_length) == ESP_OK ? 0 : -2;
+    return esp_partition_erase_range(p, 0, erase_length) == ESP_OK ? 0 : -2;
 }
 
 int jpeg_frame_write(uint32_t offset, const uint8_t *data, int length)
 {
-    const esp_partition_t *partition = partition_named("imgframe");
-    if (!partition || !data || length < 0 ||
-        offset + (uint32_t)length > partition->size) {
-        return -1;
-    }
-    return esp_partition_write(partition, offset, data, (size_t)length) == ESP_OK ? 0 : -2;
+    const esp_partition_t *p = partition_named("imgframe");
+    if (!p || !data || length < 0 || offset + (uint32_t)length > p->size) return -1;
+    return esp_partition_write(p, offset, data, (size_t)length) == ESP_OK ? 0 : -2;
 }
 
 int jpeg_frame_mmap(const uint8_t **data, uint32_t byte_count)
 {
-    const esp_partition_t *partition = partition_named("imgframe");
-    if (!partition || !data || byte_count > partition->size) return -1;
+    const esp_partition_t *p = partition_named("imgframe");
+    if (!p || !data || byte_count > p->size) return -1;
     if (s_frame_mapped) jpeg_frame_unmap();
     const void *mapped = NULL;
-    if (esp_partition_mmap(partition, 0, byte_count,
-                           ESP_PARTITION_MMAP_DATA, &mapped,
-                           &s_frame_map) != ESP_OK) {
-        return -2;
-    }
+    if (esp_partition_mmap(p, 0, byte_count, ESP_PARTITION_MMAP_DATA,
+                           &mapped, &s_frame_map) != ESP_OK) return -2;
     s_frame_mapped = true;
     *data = mapped;
     return 0;
@@ -157,6 +202,6 @@ void jpeg_frame_unmap(void)
 
 uint32_t jpeg_frame_capacity(void)
 {
-    const esp_partition_t *partition = partition_named("imgframe");
-    return partition ? partition->size : 0;
+    const esp_partition_t *p = partition_named("imgframe");
+    return p ? p->size : 0;
 }

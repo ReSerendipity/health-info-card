@@ -68,12 +68,19 @@ static int current_battery(void)
     return s_battery_percent;
 }
 
+static int total_pages(void)
+{
+    return UI_SAFETY_BASE_PAGES + jpeg_store_slot_count_valid();
+}
+
 static void show_profile(void)
 {
     int battery = current_battery();
-    bool has_qr = jpeg_store_has_valid();
+    int total = total_pages();
+    int slot = s_page - UI_SAFETY_BASE_PAGES;
+    bool has_qr = slot >= 0 && jpeg_store_slot_has(slot);
     if (!bsp_lvgl_lock(1000)) return;
-    ui_safety_show_profile(&s_profile, s_page, has_qr, battery);
+    ui_safety_show_profile(&s_profile, s_page, has_qr, total, battery);
     bsp_lvgl_unlock();
 }
 
@@ -165,17 +172,20 @@ static void handle_profile_button(const button_message_t *message)
         return;
     }
     if (message->event != BSP_BTN_CLICK) return;
+    int total = total_pages();
     if (message->button == BSP_BTN_UP) {
-        s_page = (s_page + UI_SAFETY_PAGE_COUNT - 1) % UI_SAFETY_PAGE_COUNT;
+        s_page = (s_page + total - 1) % total;
         show_profile();
     } else if (message->button == BSP_BTN_DOWN) {
-        s_page = (s_page + 1) % UI_SAFETY_PAGE_COUNT;
+        s_page = (s_page + 1) % total;
         show_profile();
     } else if (message->button == BSP_BTN_OK &&
-               s_page == UI_SAFETY_PAGE_COUNT - 1 &&
-               jpeg_store_has_valid()) {
-        show_qr_loading();
-        if (!jpeg_view_request()) show_qr_error();
+               s_page >= UI_SAFETY_BASE_PAGES) {
+        int slot = s_page - UI_SAFETY_BASE_PAGES;
+        if (jpeg_store_slot_has(slot)) {
+            show_qr_loading();
+            if (!jpeg_view_request_slot(slot)) show_qr_error();
+        }
     }
 }
 
@@ -284,9 +294,10 @@ void app_main(void)
 
     s_accept_buttons = !woke_from_button;
     s_page = 0;
-    if (woke_from_button && s_sleep_page_code >= 1 &&
-        s_sleep_page_code <= UI_SAFETY_PAGE_COUNT) {
-        s_page = s_sleep_page_code - 1;
+    if (woke_from_button && s_sleep_page_code >= 1) {
+        int saved_total = total_pages();
+        if (s_sleep_page_code - 1 < saved_total)
+            s_page = s_sleep_page_code - 1;
     }
     note_activity();
     if (configured) {

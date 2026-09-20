@@ -26,13 +26,14 @@ static lv_obj_t *s_previous;
 static lv_image_dsc_t s_descriptor;
 static jpeg_view_result_cb_t s_callback;
 static void *s_callback_user;
+static int s_requested_slot = 0;
 static uint8_t s_block[SCREEN_WIDTH * 16 * 2] __attribute__((aligned(16)));
 
 static bool decode_to_frame(int *width, int *height)
 {
     const uint8_t *jpeg = NULL;
     int jpeg_length = 0;
-    if (jpeg_store_mmap(&jpeg, &jpeg_length) != 0) return false;
+    if (jpeg_store_slot_mmap(s_requested_slot, &jpeg, &jpeg_length) != 0) return false;
 
     jpeg_probe_t probe = jpeg_probe(jpeg, jpeg_length);
     if (probe != JPEG_PROBE_OK) {
@@ -154,12 +155,18 @@ bool jpeg_view_init(jpeg_view_result_cb_t callback, void *user)
                        &s_worker) == pdPASS;
 }
 
-bool jpeg_view_request(void)
+bool jpeg_view_request_slot(int slot)
 {
-    if (!s_worker || s_busy || s_active || !jpeg_store_has_valid()) return false;
+    if (!s_worker || s_busy || s_active || !jpeg_store_slot_has(slot)) return false;
+    s_requested_slot = slot;
     s_busy = true;
     xTaskNotifyGive(s_worker);
     return true;
+}
+
+bool jpeg_view_request(void)
+{
+    return jpeg_view_request_slot(0);
 }
 
 bool jpeg_view_is_active(void) { return s_active; }

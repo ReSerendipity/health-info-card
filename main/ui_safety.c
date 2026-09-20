@@ -90,7 +90,8 @@ static lv_obj_t *safe_label(lv_obj_t *parent, const char *text, int width,
     return label;
 }
 
-static void add_status(lv_obj_t *screen, int page, int battery_percent)
+static void add_status(lv_obj_t *screen, int page, int total_pages,
+                       int battery_percent)
 {
     if (battery_percent >= 0) {
         lv_obj_t *battery = lv_label_create(screen);
@@ -101,8 +102,7 @@ static void add_status(lv_obj_t *screen, int page, int battery_percent)
     }
     if (page >= 0) {
         lv_obj_t *indicator = lv_label_create(screen);
-        lv_label_set_text_fmt(indicator, "%d/%d", page + 1,
-                              UI_SAFETY_PAGE_COUNT);
+        lv_label_set_text_fmt(indicator, "%d/%d", page + 1, total_pages);
         lv_obj_set_style_text_font(indicator, &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(indicator, lv_color_hex(UI_INK), 0);
         lv_obj_set_pos(indicator, 190, 47);
@@ -138,14 +138,16 @@ static void center_body(lv_obj_t *panel, const char *text)
 }
 
 void ui_safety_show_profile(const safety_profile_t *profile, int page,
-                            bool has_wechat_qr, int battery_percent)
+                            bool has_wechat_qr, int total_pages,
+                            int battery_percent)
 {
     if (!profile) return;
+    if (total_pages < UI_SAFETY_BASE_PAGES) total_pages = UI_SAFETY_BASE_PAGES;
     if (page < 0) page = 0;
-    if (page >= UI_SAFETY_PAGE_COUNT) page = UI_SAFETY_PAGE_COUNT - 1;
+    if (page >= total_pages) page = total_pages - 1;
 
     lv_obj_t *screen = new_screen("SAFE CARD");
-    add_status(screen, page, battery_percent);
+    add_status(screen, page, total_pages, battery_percent);
     lv_obj_t *panel = content_panel(screen);
     add_demo_warning(panel, profile->demo);
     char body[560];
@@ -183,13 +185,24 @@ void ui_safety_show_profile(const safety_profile_t *profile, int page,
                  profile->medical[0] ? profile->medical :
                  "暂无特别健康提醒");
     } else {
-        snprintf(body, sizeof(body), "微信联系\n\n%s\n\n%s",
-                 has_wechat_qr ? "按确认键显示家属微信二维码" :
-                                 "尚未上传微信二维码",
-                 profile->wechat_note[0] ? profile->wechat_note : "");
+        int slot = page - UI_SAFETY_BASE_PAGES;
+        int slot_total = total_pages - UI_SAFETY_BASE_PAGES;
+        if (slot_total > 1) {
+            snprintf(body, sizeof(body),
+                     "微信联系 %d/%d\n\n%s\n\n%s",
+                     slot + 1, slot_total,
+                     has_wechat_qr ? "按确认键显示二维码" :
+                                     "该槽位未上传",
+                     profile->wechat_note[0] ? profile->wechat_note : "");
+        } else {
+            snprintf(body, sizeof(body), "微信联系\n\n%s\n\n%s",
+                     has_wechat_qr ? "按确认键显示家属微信二维码" :
+                                     "尚未上传微信二维码",
+                     profile->wechat_note[0] ? profile->wechat_note : "");
+        }
     }
     center_body(panel, body);
-    add_footer(screen, page == UI_SAFETY_PAGE_COUNT - 1
+    add_footer(screen, page == total_pages - 1
                            ? "上下键翻页 | 确认显示二维码"
                            : "上下键翻页 | 长按确认重新设置");
 }
@@ -199,7 +212,7 @@ void ui_safety_show_setup(const char *ssid, const char *password,
 {
     (void)first_setup;
     lv_obj_t *screen = new_screen("LOCAL SETUP");
-    add_status(screen, -1, battery_percent);
+    add_status(screen, -1, 0, battery_percent);
     char payload[160];
     snprintf(payload, sizeof(payload), "WIFI:T:WPA;S:%s;P:%s;;",
              ssid, password);
@@ -223,7 +236,7 @@ void ui_safety_show_setup(const char *ssid, const char *password,
 void ui_safety_show_reset_confirm(int battery_percent)
 {
     lv_obj_t *screen = new_screen("RESET?");
-    add_status(screen, -1, battery_percent);
+    add_status(screen, -1, 0, battery_percent);
     lv_obj_t *panel = content_panel(screen);
     center_body(panel, "重新设置安心牌?\n\n将临时开启设备热点\n旧资料会保留到新资料保存成功");
     add_footer(screen, "确认继续 | 上下键取消");
@@ -232,7 +245,7 @@ void ui_safety_show_reset_confirm(int battery_percent)
 void ui_safety_show_saved(int battery_percent)
 {
     lv_obj_t *screen = new_screen("SAVED");
-    add_status(screen, -1, battery_percent);
+    add_status(screen, -1, 0, battery_percent);
     lv_obj_t *panel = content_panel(screen);
     center_body(panel, "设置完成\n\n资料已保存在设备本地\n无线网络已经关闭");
     add_footer(screen, "即将返回安心牌");
@@ -241,7 +254,7 @@ void ui_safety_show_saved(int battery_percent)
 void ui_safety_show_qr_loading(int battery_percent)
 {
     lv_obj_t *screen = new_screen("WECHAT QR");
-    add_status(screen, -1, battery_percent);
+    add_status(screen, -1, 0, battery_percent);
     lv_obj_t *panel = content_panel(screen);
     center_body(panel, "正在读取家属二维码...");
     add_footer(screen, "请稍候");
@@ -250,7 +263,7 @@ void ui_safety_show_qr_loading(int battery_percent)
 void ui_safety_show_qr_error(int battery_percent)
 {
     lv_obj_t *screen = new_screen("QR ERROR");
-    add_status(screen, -1, battery_percent);
+    add_status(screen, -1, 0, battery_percent);
     lv_obj_t *panel = content_panel(screen);
     center_body(panel, "二维码读取失败\n\n请长按确认键重新设置\n并再次上传清晰的二维码截图");
     add_footer(screen, "上下键返回资料页");
