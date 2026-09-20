@@ -80,13 +80,19 @@ int jpeg_store_slot_end(int slot)
 {
     const esp_partition_t *p = partition_named("imgstore");
     if (!p || !slot_valid(slot) || s_cur_slot != slot || s_write_offset == 0) return -1;
-    uint8_t hdr[8];
-    memcpy(hdr, MAGIC, sizeof(MAGIC));
-    hdr[4] = s_write_offset & 0xFF;
-    hdr[5] = (s_write_offset >> 8) & 0xFF;
-    hdr[6] = (s_write_offset >> 16) & 0xFF;
-    hdr[7] = (s_write_offset >> 24) & 0xFF;
-    int rc = esp_partition_write(p, (uint32_t)(slot * 8), hdr, sizeof(hdr)) == ESP_OK ? 0 : -2;
+    // Read the whole 4 KiB header sector, blank this slot's descriptor into it,
+    // erase the sector, then write it back. This preserves other slots.
+    static uint8_t hdr_sector[0x1000];
+    int rc = -2;
+    if (esp_partition_read(p, 0, hdr_sector, sizeof(hdr_sector)) != ESP_OK) goto out;
+    memcpy(hdr_sector + slot * 8, MAGIC, 4);
+    hdr_sector[slot * 8 + 4] = s_write_offset & 0xFF;
+    hdr_sector[slot * 8 + 5] = (s_write_offset >> 8) & 0xFF;
+    hdr_sector[slot * 8 + 6] = (s_write_offset >> 16) & 0xFF;
+    hdr_sector[slot * 8 + 7] = (s_write_offset >> 24) & 0xFF;
+    if (esp_partition_erase_range(p, 0, 0x1000) != ESP_OK) goto out;
+    if (esp_partition_write(p, 0, hdr_sector, sizeof(hdr_sector)) == ESP_OK) rc = 0;
+out:
     s_cur_slot = -1;
     s_write_offset = 0;
     return rc;
@@ -150,10 +156,11 @@ void jpeg_store_slot_clear(int slot)
 {
     const esp_partition_t *p = partition_named("imgstore");
     if (!p || !slot_valid(slot)) return;
-    // Erase the header bytes for this slot (a sector write 0xFF is enough) and
-    // its data area so the slot reports empty.
-    uint8_t blank[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-    (void)esp_partition_write(p, (uint32_t)(slot * 8), blank, sizeof(blank));
+    static uint8_t hdr_sector[0x1000];
+    if (esp_partition_read(p, 0, hdr_sector, sizeof(hdr_sector)) != ESP_OK) return;
+    memset(hdr_sector + slot * 8, 0xFF, 8);
+    if (esp_partition_erase_range(p, 0, 0x1000) != ESP_OK) return;
+    (void)esp_partition_write(p, 0, hdr_sector, sizeof(hdr_sector));
     (void)esp_partition_erase_range(p, SLOT_OFFSET[slot], SLOT_AREA[slot]);
 }
 
