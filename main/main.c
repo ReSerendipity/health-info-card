@@ -11,8 +11,10 @@
 #include "safety_store.h"
 #include "ui_safety.h"
 
+#include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
+#include "driver/gpio.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -47,6 +49,10 @@ static uint32_t s_last_activity_ms;
 static uint32_t s_saved_at_ms;
 static bool s_accept_buttons;
 static volatile bool s_qr_failed;
+// 深睡期间普通 RAM 丢失;用 RTC 内存保存深睡前页号(页号+1,0=无效),
+// GPIO 唤醒后恢复到原页。首次上电 RTC 内存为随机值,
+// 仅在按键唤醒时使用。
+RTC_NOINIT_ATTR static int s_sleep_page_code;
 
 static uint32_t now_ms(void)
 {
@@ -217,6 +223,7 @@ static void enter_deep_sleep(void)
         note_activity();
         return;
     }
+    s_sleep_page_code = s_page + 1;
     if (jpeg_view_is_active()) jpeg_view_exit();
     if (safety_portal_is_running()) safety_portal_stop();
     bsp_display_backlight(0);
@@ -225,6 +232,17 @@ static void enter_deep_sleep(void)
         ESP_LOGW(TAG, "Button shutdown before sleep returned: %s",
                  esp_err_to_name(error));
     }
+    // Deep sleep: hold the button node (GPIO0) as internal pull-up input.
+    // Without this the pin floats after the ADC unit is torn down; on a
+    // brownout/reset during sleep the voltage can sit in the upper-button
+    // range, and the bootloader reads it as an UP-key long-press -> Recovery.
+    gpio_config_t btn_io = {
+        .pin_bit_mask = 1ULL << BSP_BTN_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    };
+    gpio_config(&btn_io);
     ESP_LOGI(TAG, "Entering deep sleep; any function key wakes the device");
     esp_deep_sleep_start();
 }
@@ -266,6 +284,10 @@ void app_main(void)
 
     s_accept_buttons = !woke_from_button;
     s_page = 0;
+    if (woke_from_button && s_sleep_page_code >= 1 &&
+        s_sleep_page_code <= UI_SAFETY_PAGE_COUNT) {
+        s_page = s_sleep_page_code - 1;
+    }
     note_activity();
     if (configured) {
         s_mode = MODE_PROFILE;

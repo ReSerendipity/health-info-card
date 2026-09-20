@@ -32,6 +32,12 @@ class SafetyCardContractTest(unittest.TestCase):
         self.assertIn("pin_hash[32]", PROFILE)
         self.assertNotIn("char pin[", PROFILE)
         self.assertIn("mbedtls_sha256", PORTAL)
+        self.assertIn("uint8_t demo;", PROFILE)
+
+    def test_pin_throttle_and_local_only_setup_routes(self):
+        self.assertIn("PIN_THROTTLE_MAX_FAILURES", PORTAL)
+        self.assertIn("pin_throttle_allowed", PORTAL)
+        self.assertIn("esp_timer_get_time", PORTAL)
 
     def test_qr_and_protected_partition_layout(self):
         for line in (

@@ -3,6 +3,7 @@
 #include "jpeg_probe.h"
 #include "jpeg_store.h"
 #include "jpeg_view.h"
+#include "pin_throttle.h"
 #include "safety_store.h"
 
 #include "cJSON.h"
@@ -12,6 +13,7 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -23,7 +25,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define QR_UPLOAD_MAX (120u * 1024u)
+#define QR_UPLOAD_MAX (110u * 1024u)
+
+// PIN 尝试限速:连续 5 次错误后锁定 60 秒,抵御在线暴力破解。
+#define PIN_THROTTLE_MAX_FAILURES 5u
+#define PIN_THROTTLE_LOCK_MS (60u * 1000u)
 
 static const char *TAG = "safety_portal";
 static httpd_handle_t s_http;
@@ -35,6 +41,7 @@ static bool s_running;
 static volatile bool s_dns_running;
 static volatile bool s_saved;
 static safety_profile_t *s_profile;
+static pin_throttle_t s_throttle;
 static char s_ssid[33];
 static char s_password[17];
 
@@ -72,6 +79,8 @@ static const char PAGE_HTML[] =
 "<h1>设置随身安心信息</h1><p>资料从手机直接写入当前设备，不经过互联网。保存后设备会关闭热点。</p>"
 "</section><form id=form><section class=card><h2>基本信息</h2>"
 "<label>称呼或姓名 *</label><input id=name maxlength=12 required placeholder='例如：王爷爷'>"
+"<div class=row><div><label>年龄</label><input id=age maxlength=8 placeholder='如 68'></div>"
+"<div><label>血型</label><input id=blood maxlength=8 placeholder='如 A型'></div></div>"
 "<label>求助说明 *</label><textarea id=help maxlength=36 required>您好，我可能迷路了，请帮我联系家人</textarea>"
 "<label>居住区域</label><input id=area maxlength=22 placeholder='例如：上海市徐汇区田林街道'>"
 "<label>完整家庭住址</label><textarea id=address maxlength=48 placeholder='请确认展示完整住址的隐私风险'></textarea>"
@@ -82,7 +91,7 @@ static const char PAGE_HTML[] =
 "<input id=phone inputmode=tel maxlength=24 placeholder='138 0000 0000'><label>备用联系电话</label>"
 "<input id=backup inputmode=tel maxlength=24><label class=check><input id=showPhone type=checkbox checked>"
 "<span>显示完整联系电话；关闭后中间数字显示为星号</span></label><label>家属微信二维码</label>"
-"<input id=qr type=file accept='image/jpeg,image/png,image/webp'><p class=tip>手机会把图片缩放为设备可识别的 200×200 JPEG。"
+"<input id=qr type=file accept='image/jpeg,image/png,image/webp'><p class=tip>手机会把图片缩放为设备可识别的 240×240 JPEG。"
 "建议上传清晰、边缘完整的二维码截图。</p><label>微信联系说明</label>"
 "<input id=wechat maxlength=25 value='请添加我的家人，备注安心牌'></section>"
 "<section class=card><h2>健康提醒</h2><label>过敏、疾病、常用药或照护提醒</label>"
@@ -97,19 +106,24 @@ static const char PAGE_HTML[] =
 "const r=await fetch(path,opt);if(!r.ok)throw new Error(await r.text()||('请求失败 '+r.status));return r}"
 "async function load(){try{let st=await(await fetch('/status')).json();if(st.pin_required){adminPin=prompt('请输入安心牌管理密码')||'';}"
 "let p=await(await api('/profile')).json();let map={name:'name',help_text:'help',home_area:'area',home_address:'address',"
-"contact_name:'contact',relation:'relation',phone:'phone',backup_phone:'backup',medical:'medical',wechat_note:'wechat'};"
+"contact_name:'contact',relation:'relation',phone:'phone',backup_phone:'backup',medical:'medical',wechat_note:'wechat',"
+"age:'age',blood_type:'blood'};"
 "for(let k in map)$(map[k]).value=p[k]||'';$('showAddress').checked=!!p.show_full_address;$('showPhone').checked=!!p.show_full_phone"
 "}catch(e){alert(e.message)}}"
 "function jpeg(file){return new Promise((resolve,reject)=>{let u=URL.createObjectURL(file),im=new Image;im.onload=()=>{"
-"let c=document.createElement('canvas'),s=200;c.width=s;c.height=s;let x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,s,s);"
+"let c=document.createElement('canvas'),s=240;c.width=s;c.height=s;let x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,s,s);"
 "x.imageSmoothingEnabled=false;let q=Math.min(s/im.width,s/im.height),w=im.width*q,h=im.height*q;"
 "x.drawImage(im,(s-w)/2,(s-h)/2,w,h);c.toBlob(b=>{URL.revokeObjectURL(u);b?resolve(b):reject(new Error('二维码处理失败'))},"
 "'image/jpeg',.92)};im.onerror=()=>reject(new Error('无法读取二维码图片'));im.src=u})}"
 "$('form').onsubmit=async e=>{e.preventDefault();let b=$('save'),s=$('status');b.disabled=true;b.textContent='正在写入...';"
-"try{let f=$('qr').files[0];if(f){let blob=await jpeg(f);await api('/wechat-qr',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob})}"
+"try{let phoneRe=/^[0-9 +\\-()]*$/;if(!phoneRe.test($('phone').value)||!phoneRe.test($('backup').value))throw new Error('联系电话只能输入数字');"
+"let ageV=$('age').value;if(ageV&&(!/^\\d+$/.test(ageV)||+ageV<1||+ageV>150))throw new Error('年龄需为 1~150 的数字');"
+"let bloodV=$('blood').value;if(bloodV&&bloodV!=='未知'&&!/^(A|B|AB|O)[+-]?型?$/.test(bloodV))throw new Error('血型请填 A/B/AB/O（可带 +/-）');"
+"let f=$('qr').files[0];if(f){let blob=await jpeg(f);await api('/wechat-qr',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob})}"
 "let data={name:$('name').value,help_text:$('help').value,home_area:$('area').value,home_address:$('address').value,"
 "contact_name:$('contact').value,relation:$('relation').value,phone:$('phone').value,backup_phone:$('backup').value,"
-"medical:$('medical').value,wechat_note:$('wechat').value,show_full_address:$('showAddress').checked,"
+"medical:$('medical').value,wechat_note:$('wechat').value,age:$('age').value,blood_type:$('blood').value,"
+"show_full_address:$('showAddress').checked,"
 "show_full_phone:$('showPhone').checked,pin:$('pin').value};await api('/save',{method:'POST',headers:{'Content-Type':'application/json'},"
 "body:JSON.stringify(data)});s.style.display='block';s.textContent='保存成功。设备正在关闭热点并返回安心牌。';b.textContent='已保存'"
 "}catch(err){s.style.display='block';s.style.background='#fff0ec';s.textContent=err.message;b.disabled=false;b.textContent='重新保存'}};load();"
@@ -215,11 +229,17 @@ static bool request_authorized(httpd_req_t *request)
         !safety_profile_has_pin(s_profile)) {
         return true;
     }
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    if (!pin_throttle_allowed(&s_throttle, now)) return false;
+
     char pin[8] = {0};
     size_t length = httpd_req_get_hdr_value_len(request, "X-Admin-Pin");
     if (length == 0 || length >= sizeof(pin) ||
         httpd_req_get_hdr_value_str(request, "X-Admin-Pin", pin,
                                     sizeof(pin)) != ESP_OK) {
+        pin_throttle_report_failure(&s_throttle, now,
+                                    PIN_THROTTLE_MAX_FAILURES,
+                                    PIN_THROTTLE_LOCK_MS);
         return false;
     }
     uint8_t digest[32];
@@ -230,12 +250,28 @@ static bool request_authorized(httpd_req_t *request)
     }
     memset(pin, 0, sizeof(pin));
     memset(digest, 0, sizeof(digest));
-    return difference == 0;
+    if (difference != 0) {
+        pin_throttle_report_failure(&s_throttle, now,
+                                    PIN_THROTTLE_MAX_FAILURES,
+                                    PIN_THROTTLE_LOCK_MS);
+        return false;
+    }
+    pin_throttle_reset(&s_throttle);
+    return true;
 }
 
 static esp_err_t forbidden(httpd_req_t *request)
 {
     httpd_resp_set_status(request, "403 Forbidden");
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    if (!pin_throttle_allowed(&s_throttle, now)) {
+        uint32_t remaining = (s_throttle.locked_until_ms - now + 999u) / 1000u;
+        char message[64];
+        snprintf(message, sizeof(message),
+                 "尝试次数过多，请在 %lu 秒后重试",
+                 (unsigned long)remaining);
+        return httpd_resp_sendstr(request, message);
+    }
     return httpd_resp_sendstr(request, "管理密码错误");
 }
 
@@ -277,6 +313,8 @@ static esp_err_t profile_get(httpd_req_t *request)
     add_string(root, "backup_phone", s_profile->backup_phone);
     add_string(root, "medical", s_profile->medical);
     add_string(root, "wechat_note", s_profile->wechat_note);
+    add_string(root, "age", s_profile->age);
+    add_string(root, "blood_type", s_profile->blood_type);
     cJSON_AddBoolToObject(root, "show_full_address", s_profile->show_full_address);
     cJSON_AddBoolToObject(root, "show_full_phone", s_profile->show_full_phone);
     char *json = cJSON_PrintUnformatted(root);
@@ -346,9 +384,19 @@ static esp_err_t save_post(httpd_req_t *request)
                  copy_json_string(root, "medical", next.medical,
                                   sizeof(next.medical)) &&
                  copy_json_string(root, "wechat_note", next.wechat_note,
-                                  sizeof(next.wechat_note));
+                                  sizeof(next.wechat_note)) &&
+                 copy_json_string(root, "age", next.age, sizeof(next.age)) &&
+                 copy_json_string(root, "blood_type", next.blood_type,
+                                  sizeof(next.blood_type));
     next.show_full_address = json_bool(root, "show_full_address", false);
-    next.show_full_phone = json_bool(root, "show_full_phone", true);
+    next.show_full_phone = json_bool(root, "show_full_phone", false);
+    // 门户保存即真实档案:清除内置占位示例标志。
+    next.demo = 0;
+    // 内容校验(防越界由 copy_json_string 保证,这里防无效数据落盘)。
+    valid = valid && safety_profile_valid_phone(next.phone) &&
+            safety_profile_valid_phone(next.backup_phone) &&
+            safety_profile_valid_age(next.age) &&
+            safety_profile_valid_blood_type(next.blood_type);
 
     cJSON *pin = cJSON_GetObjectItemCaseSensitive(root, "pin");
     if (valid && cJSON_IsString(pin) && pin->valuestring &&
@@ -366,7 +414,7 @@ static esp_err_t save_post(httpd_req_t *request)
 
     if (!valid || (next.phone[0] == '\0' && !jpeg_store_has_valid())) {
         return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
-                                   "请填写姓名、求助说明，并至少提供电话或微信二维码；若字段过长请适当精简");
+                                   "请检查表单：姓名与求助说明必填；电话仅限数字（7~15 位）；年龄需为 1~150 的数字；血型请填 A/B/AB/O（可带 +/-）");
     }
     if (!safety_store_save(&next)) {
         return httpd_resp_send_err(request,
@@ -483,6 +531,7 @@ bool safety_portal_start(safety_profile_t *profile, bool first_setup)
     if (s_running || !profile) return false;
     s_profile = profile;
     s_saved = false;
+    pin_throttle_reset(&s_throttle);
     make_credentials();
 
     if (!s_netif_ready) {

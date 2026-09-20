@@ -74,6 +74,7 @@ def shot(ser, out, timeout=6):
 def key(ser, btn, ev):
     ser.reset_input_buffer()
     ser.write(f"FAP_KEY_V1 {btn} {ev}\n".encode("ascii"))
+    ser.flush()
 
 
 def main():

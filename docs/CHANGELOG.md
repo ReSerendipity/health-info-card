@@ -6,6 +6,30 @@
 
 ## Unreleased
 
+- Fixed spurious Recovery entry on deep sleep: the shared button node
+  GPIO0 was left floating after the ADC unit was torn down before sleep;
+  a brownout/reset during sleep left its voltage in the upper-button band,
+  which the ROM bootloader read as an UP-key long-press and jumped into
+  Recovery. The pin is now forced to internal pull-up input before sleeping
+  so it stays high, eliminating false Recovery entry after portal save or
+  idle timeout.
+- Hardened the health info card to v3: a `demo` flag marks the built-in
+  placeholder profile and the UI shows a red sample-data banner on every page
+  until a real profile is saved from the portal; phone numbers (primary and
+  backup) are masked by default via a shared `safety_profile_mask_number`
+  helper; the portal now edits age and blood type; PIN attempts are throttled
+  (5 failures lock for 60 s) against online brute force; deep-sleep wake
+  returns to the previous page via RTC memory.
+- Portal form validation and hint copy: saving validates phone (digits plus
+  + - ( ) and spaces, 7–15 digits), age (1–150 numeric), blood type
+  (A/B/AB/O with optional +/-; accepts the trailing type suffix and the
+  unknown value); client-side JS validates with explicit error messages;
+  portal hint now reads “WiFi scan to join hotspot / open 192.168.4.1 in
+  browser / password valid once, avoid photos” (WiFi scan flow verified).
+- FAP acceptance tooling: `fap_device.py` key command now flushes and holds
+  the serial port before exit (Windows driver buffering otherwise dropped the
+  injected key); `fap_verify.py` rewritten to a single persistent connection
+  (per-process port open/close re-enumerated the device and reset the app).
 - Extended the Senior Safety Card profile to v2 with explicit `age` and
   `blood_type` fields shown on the first page, and made first boot display a
   ready-made placeholder profile (name / age / blood type / family contacts /

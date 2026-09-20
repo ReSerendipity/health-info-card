@@ -109,6 +109,15 @@ static void add_status(lv_obj_t *screen, int page, int battery_percent)
     }
 }
 
+static void add_demo_warning(lv_obj_t *panel, bool demo)
+{
+    if (!demo) return;
+    lv_obj_t *warning = safe_label(panel,
+        "示例数据（非真实信息）· 请长按确认键配置", 200, UI_RED);
+    lv_obj_set_style_text_align(warning, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(warning, 10, 6);
+}
+
 static lv_obj_t *content_panel(lv_obj_t *screen)
 {
     return ui_pixel_panel_create(screen, 10, 64, 220, 214, UI_PAPER);
@@ -138,6 +147,7 @@ void ui_safety_show_profile(const safety_profile_t *profile, int page,
     lv_obj_t *screen = new_screen("SAFE CARD");
     add_status(screen, page, battery_percent);
     lv_obj_t *panel = content_panel(screen);
+    add_demo_warning(panel, profile->demo);
     char body[560];
 
     if (page == 0) {
@@ -150,13 +160,17 @@ void ui_safety_show_profile(const safety_profile_t *profile, int page,
                  "您好，我可能迷路了，请帮我联系家人");
     } else if (page == 1) {
         char phone[40];
+        char backup[40];
         safety_profile_mask_phone(profile, phone, sizeof(phone));
+        safety_profile_mask_number(profile->backup_phone,
+                                   profile->show_full_phone,
+                                   backup, sizeof(backup));
         snprintf(body, sizeof(body), "联系家人\n\n%s%s%s\n\n%s%s%s",
                  profile->contact_name[0] ? profile->contact_name : "家属",
                  profile->relation[0] ? " / " : "", profile->relation,
                  phone[0] ? phone : "未填写电话",
-                 profile->backup_phone[0] ? "\n备用: " : "",
-                 profile->backup_phone);
+                 backup[0] ? "\n备用: " : "",
+                 backup);
     } else if (page == 2) {
         const char *address = profile->show_full_address &&
                               profile->home_address[0]
@@ -197,8 +211,10 @@ void ui_safety_show_setup(const char *ssid, const char *password,
     lv_qrcode_set_data(qr, payload);
     lv_obj_set_pos(qr, 31, 57);
 
-    char hint[120];
-    snprintf(hint, sizeof(hint), "相机扫码连接热点\n%s\n打开 192.168.4.1", ssid);
+    char hint[200];
+    snprintf(hint, sizeof(hint),
+             "WiFi扫一扫连热点 %s\n浏览器打开 192.168.4.1\n密码仅本次有效·谨防拍照",
+             ssid);
     lv_obj_t *label = safe_label(screen, hint, 224, UI_INK);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_pos(label, 8, 241);

@@ -125,6 +125,10 @@ def _argb2222(data, off):
 def key(port, btn, ev):
     ser = _open(port)
     ser.write(f"FAP_KEY_V1 {btn} {ev}\n".encode("ascii"))
+    ser.flush()
+    # 进程退出时连接关闭会丢弃 Windows 驱动缓冲中未发送的字节;
+    # 保持连接一小段时间确保命令真正进入 USB(实测不冲刷时按键不生效)。
+    time.sleep(0.2)
     print(f"sent FAP_KEY_V1 {btn} {ev}")
 
 
