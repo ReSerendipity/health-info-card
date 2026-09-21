@@ -109,13 +109,13 @@ static void add_status(lv_obj_t *screen, int page, int total_pages,
     }
 }
 
-static void add_demo_warning(lv_obj_t *panel, bool demo)
+static void add_demo_warning(lv_obj_t *screen, bool demo)
 {
     if (!demo) return;
-    lv_obj_t *warning = safe_label(panel,
+    lv_obj_t *warning = safe_label(screen,
         "示例数据（非真实信息）· 请长按确认键配置", 200, UI_RED);
     lv_obj_set_style_text_align(warning, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(warning, 10, 6);
+    lv_obj_set_pos(warning, 60, 38);
 }
 
 static lv_obj_t *content_panel(lv_obj_t *screen)
@@ -149,7 +149,7 @@ void ui_safety_show_profile(const safety_profile_t *profile, int page,
     lv_obj_t *screen = new_screen("SAFE CARD");
     add_status(screen, page, total_pages, battery_percent);
     lv_obj_t *panel = content_panel(screen);
-    add_demo_warning(panel, profile->demo);
+    add_demo_warning(screen, profile->demo);
     char body[560];
 
     if (page == 0) {
