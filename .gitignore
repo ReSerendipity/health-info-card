@@ -4,3 +4,14 @@ sdkconfig.old
 managed_components/
 .vscode/
 .idea/
+
+# Local dev tooling / scratch
+_idf_env.sh
+_idf_bootstrap.py
+_idf_bin/
+_backup_*/
+_fap_shots/
+*.bmp
+
+# Publisher credentials (never commit)
+publisher-config/
