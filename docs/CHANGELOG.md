@@ -6,7 +6,6 @@
 
 ## Unreleased
 
-- Relicensed from MIT to Apache-2.0; FoloToy MIT attribution preserved in NOTICE.
 - Multi-slot QR storage: the imgstore partition is now split into four
   upload slots (28 KiB each, ~112 KiB total, still ~90% budget). The portal
   exposes four upload fields (family / backup / community-doctor / other);
