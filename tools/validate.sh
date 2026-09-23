@@ -32,6 +32,10 @@ run_static_checks() {
         tests/test_safety_profile.c main/safety_profile.c \
         -o "${test_dir}/test_safety_profile"
     "${test_dir}/test_safety_profile"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_pin_throttle.c main/pin_throttle.c \
+        -o "${test_dir}/test_pin_throttle"
+    "${test_dir}/test_pin_throttle"
     python3 tests/test_safety_contract.py
     python3 tests/test_verify_firmware.py
     rm -rf "${test_dir}"

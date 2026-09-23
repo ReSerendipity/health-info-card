@@ -1,6 +1,7 @@
 #include "pin_throttle.h"
 
 #include <assert.h>
+#include <stddef.h>
 
 int main(void)
 {

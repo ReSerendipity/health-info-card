@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - health-info-official
   workflow_dispatch:
 
 permissions:
